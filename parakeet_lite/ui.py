@@ -39,6 +39,8 @@ class UIController:
         self.connection_var = tk.StringVar(value="Ollama: checking")
         self.level_var = tk.DoubleVar(value=0.0)
         self.timer_var = tk.StringVar(value="00:00 / 01:00")
+        self.interview_role_var = tk.StringVar()
+        self.interview_domain_var = tk.StringVar(value="General")
         self._recording_started = 0.0
         self._poll_id: str | None = None
         self._build_style()
@@ -83,6 +85,31 @@ class UIController:
         style.configure("Work.Horizontal.TProgressbar", troughcolor=self.COLORS["input"],
                         background=self.COLORS["accent"], lightcolor=self.COLORS["accent"],
                         darkcolor=self.COLORS["accent"])
+        style.configure(
+            "Context.TEntry",
+            fieldbackground=self.COLORS["input"],
+            foreground=self.COLORS["text"],
+            insertcolor=self.COLORS["accent"],
+            bordercolor=self.COLORS["border"],
+            lightcolor=self.COLORS["border"],
+            darkcolor=self.COLORS["border"],
+            padding=(8, 5),
+        )
+        style.configure(
+            "Context.TCombobox",
+            fieldbackground=self.COLORS["input"],
+            foreground=self.COLORS["text"],
+            background=self.COLORS["input"],
+            arrowcolor=self.COLORS["text"],
+            bordercolor=self.COLORS["border"],
+            lightcolor=self.COLORS["border"],
+            darkcolor=self.COLORS["border"],
+            padding=(6, 4),
+        )
+        self.root.option_add("*TCombobox*Listbox.background", self.COLORS["input"])
+        self.root.option_add("*TCombobox*Listbox.foreground", self.COLORS["text"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground", self.COLORS["accent_dark"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
 
     def _build_widgets(self) -> None:
         self.root.columnconfigure(0, weight=1)
@@ -129,7 +156,7 @@ class UIController:
             row=0, column=4
         )
 
-        content = ttk.PanedWindow(self.root, orient="vertical")
+        content = ttk.PanedWindow(self.root, orient="horizontal")
         content.grid(row=2, column=0, sticky="nsew", padx=24, pady=(0, 14))
         transcription_card = self._create_editor_card(
             content, "Your prompt", "Edit the transcription before asking the local AI."
@@ -172,24 +199,59 @@ class UIController:
     ) -> tuple[tk.Text, ttk.Frame, ttk.Frame]:
         card = ttk.Frame(parent, style="Surface.TFrame", padding=14)
         card.columnconfigure(0, weight=1)
-        card.rowconfigure(2, weight=1)
+        card.rowconfigure(3 if title == "Your prompt" else 2, weight=1)
         heading = ttk.Frame(card, style="Surface.TFrame")
         heading.grid(row=0, column=0, sticky="ew")
         ttk.Label(heading, text=title, style="Section.TLabel").pack(side="left")
         ttk.Label(card, text=subtitle, style="Muted.Surface.TLabel").grid(
             row=1, column=0, sticky="w", pady=(2, 8)
         )
+        if title == "Your prompt":
+            context = ttk.Frame(card, style="Surface.TFrame")
+            context.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+            context.columnconfigure(1, weight=1)
+            ttk.Label(context, text="Role", style="Muted.Surface.TLabel").grid(
+                row=0, column=0, padx=(0, 8)
+            )
+            ttk.Entry(
+                context, textvariable=self.interview_role_var, style="Context.TEntry"
+            ).grid(
+                row=0, column=1, sticky="ew"
+            )
+            ttk.Label(context, text="Domain", style="Muted.Surface.TLabel").grid(
+                row=0, column=2, padx=(10, 8)
+            )
+            ttk.Combobox(
+                context,
+                textvariable=self.interview_domain_var,
+                values=(
+                    "General", "Management", "Design", "Technology", "Finance",
+                    "Marketing", "Operations", "Sales", "Human Resources",
+                    "Customer Support", "Other",
+                ),
+                state="readonly",
+                style="Context.TCombobox",
+                width=16,
+            ).grid(row=0, column=3, padx=(0, 8))
+            ttk.Button(
+                context, text="Improve", command=self.improve_transcription,
+                style="Secondary.TButton"
+            ).grid(row=0, column=4)
+        else:
+            card.grid_rowconfigure(2, minsize=0)
+        text_row = 3 if title == "Your prompt" else 2
+        actions_row = 4 if title == "Your prompt" else 3
         text = tk.Text(
             card, wrap="word", undo=True, padx=12, pady=10, relief="flat", borderwidth=0,
             bg=self.COLORS["input"], fg=self.COLORS["text"], insertbackground=self.COLORS["accent"],
             selectbackground=self.COLORS["accent_dark"], font=("Segoe UI", 10)
         )
-        text.grid(row=2, column=0, sticky="nsew")
+        text.grid(row=text_row, column=0, sticky="nsew")
         scrollbar = ttk.Scrollbar(card, orient="vertical", command=text.yview)
-        scrollbar.grid(row=2, column=1, sticky="ns")
+        scrollbar.grid(row=text_row, column=1, sticky="ns")
         text.configure(yscrollcommand=scrollbar.set)
         actions = ttk.Frame(card, style="Surface.TFrame")
-        actions.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        actions.grid(row=actions_row, column=0, sticky="ew", pady=(10, 0))
         if title == "Your prompt":
             ttk.Button(actions, text="Suggest answer", command=self.suggest_answer,
                        style="Primary.TButton").pack(side="right")
@@ -237,6 +299,39 @@ class UIController:
         self.status_var.set("Generating a local answer...")
         self.work_progress.start(12)
         threading.Thread(target=self._generate, args=(prompt,), daemon=True).start()
+
+    def improve_transcription(self) -> None:
+        transcription = self.transcription.get("1.0", "end").strip()
+        if not transcription:
+            self.show_error("No transcription", "Record or enter text before improving it.")
+            return
+        self.status_var.set("Checking the transcription against the interview context...")
+        self.work_progress.start(12)
+        threading.Thread(
+            target=self._improve_transcription,
+            args=(transcription, self.interview_role_var.get(), self.interview_domain_var.get()),
+            daemon=True,
+        ).start()
+
+    def _improve_transcription(
+        self, transcription: str, interview_role: str, interview_domain: str
+    ) -> None:
+        try:
+            improved = self.orchestrator.improve_transcription(
+                transcription, interview_role, interview_domain
+            )
+            self.root.after(0, self._apply_improved_transcription, improved)
+        except Exception as exc:
+            self.root.after(0, self.show_error, "Transcription improvement failed", str(exc))
+
+    def _apply_improved_transcription(self, text: str) -> None:
+        self.work_progress.stop()
+        if not text.strip():
+            self.show_error("No correction returned", "Ollama returned an empty correction.")
+            return
+        self.transcription.delete("1.0", "end")
+        self.transcription.insert("1.0", text.strip())
+        self.status_var.set("Transcription improved - review the suggested wording")
 
     def _generate(self, prompt: str) -> None:
         try:

@@ -10,6 +10,32 @@ from .llm import LLMClient
 from .model_manager import ModelManager
 from .models import AppConfig, AppState, SystemStatus, TranscriptionResult
 from .transcriber import Transcriber
+from .web_search import (
+    DuckDuckGoSearch,
+    SearchDiscriminator,
+    format_search_context,
+)
+
+
+AI_DEVELOPER_TERMINOLOGY = """
+When the interview domain is Technology and the context suggests AI, software, or
+machine learning, use these canonical spellings. Correct likely speech-to-text
+variants to the canonical spelling, but only when the surrounding sentence supports
+the term:
+- LangChain (not "long chain" or "lang chain")
+- LangGraph (not "long graph" or "lang graph")
+- LangSmith (not "long smith" or "lang smith")
+- Hugging Face (not "hugging face" as a technical product name variant)
+- OpenAI, ChatGPT, GPT, LLM, RAG, and NLP
+- Python, JavaScript, TypeScript, FastAPI, Django, React, and Node.js
+- PyTorch, TensorFlow, scikit-learn, Transformers, and BERT
+- PostgreSQL, MongoDB, Redis, Docker, Kubernetes, and GitHub
+- AWS, Amazon Bedrock, Lambda, S3, Azure, and Google Cloud
+- embeddings, vector database, vector store, prompt engineering, agents,
+  tool calling, function calling, fine-tuning, evaluation, and observability
+Never insert a glossary term merely because it appears here. Use it only to repair
+a plausible recognition error or to standardize a term already implied by the text.
+"""
 
 
 class Orchestrator:
@@ -24,6 +50,8 @@ class Orchestrator:
             config.llm.base_url, config.llm.default_model, config.llm.timeout
         )
         self.transcriber = Transcriber(self.model_manager, config.transcription.model_name)
+        self.web_search = DuckDuckGoSearch(max_results=5)
+        self.search_discriminator = SearchDiscriminator()
         self.recorder = AudioRecorder(
             config.audio.sample_rate,
             config.audio.channels,
@@ -79,9 +107,7 @@ class Orchestrator:
                 top_p=self.config.llm.top_p,
                 num_predict=self.config.llm.max_tokens,
             )
-            yield from self.llm.generate_response(
-                transcription, self.config.llm.default_model, self.config.llm.stream
-            )
+            yield from self._generate_llm(transcription, allow_web_search=True)
         except Exception as exc:
             self._set_error(str(exc))
             raise
@@ -89,6 +115,48 @@ class Orchestrator:
             with self._lock:
                 self.status.state = AppState.IDLE
                 self.status.message = "Answer complete"
+
+    def improve_transcription(
+        self, transcription: str, interview_role: str, interview_domain: str
+    ) -> str:
+        role = interview_role.strip() or "the interview role"
+        domain = interview_domain.strip() or "General"
+        prompt = (
+            "You are correcting speech-to-text from an interview. Return only the corrected "
+            "transcription, with no explanation, quotation marks, or headings.\n"
+            f"Interview role: {role}\n"
+            f"Interview domain: {domain}\n"
+            "Prefer vocabulary appropriate to this domain when the surrounding context "
+            "supports it. Do not add specialized terms that are not supported by the text.\n"
+            + (AI_DEVELOPER_TERMINOLOGY if domain.lower() == "technology" else "")
+            + (
+                "For a technology interview, preserve product and framework names exactly "
+                "as written in the glossary when they are present or clearly implied.\n"
+                if domain.lower() == "technology"
+                else ""
+            )
+            + "Fix punctuation, grammar, obvious homophones, and likely transcription mistakes. "
+            "Preserve the speaker's meaning and do not invent facts.\n\n"
+            + f"Transcription:\n{transcription.strip()}"
+        )
+        return "".join(self._generate_llm(prompt, allow_web_search=False))
+
+    def _generate_llm(self, prompt: str, allow_web_search: bool) -> Generator[str, None, None]:
+        decision = self.search_discriminator.decide(prompt)
+        if allow_web_search and decision.should_search:
+            with self._lock:
+                self.status.message = "Searching the web for current information..."
+            results = self.web_search.search(prompt)
+            context = format_search_context(results)
+            if context:
+                prompt = (
+                    "Answer the user's question using the web sources below. Cite sources "
+                    "as [1], [2], etc. Do not claim a source says something it does not.\n\n"
+                    f"{context}\n\nUser question:\n{prompt}"
+                )
+        yield from self.llm.generate_response(
+            prompt, self.config.llm.default_model, self.config.llm.stream
+        )
 
     def get_status(self) -> SystemStatus:
         with self._lock:

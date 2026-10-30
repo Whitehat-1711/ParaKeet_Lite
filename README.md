@@ -13,7 +13,9 @@ generation. No application data is sent to a cloud AI service.
 - English speech transcription with faster-whisper
 - Lazy model loading and CUDA detection with CPU fallback
 - Streaming responses from a local Ollama model
+- Automatic DuckDuckGo web search for questions needing current information
 - Editable transcription before sending the prompt
+- Context-aware transcription improvement using interview role and domain
 - Copy and clear actions for generated answers
 - JSON configuration with validation
 - Graceful shutdown and model resource cleanup
@@ -54,6 +56,56 @@ flowchart TD
 8. Response tokens stream into the answer panel.
 9. Shutdown stops recording and unloads the Whisper model.
 
+Each answer request first passes through a local `SearchDiscriminator`. It scores explicit
+search requests, freshness signals, and factual lookup intent, while rejecting conceptual
+questions such as “How does LangChain work?” or “Explain dependency injection.” Only a
+positive discriminator decision invokes the web-search adapter. The retrieved titles,
+snippets, and URLs are added to the Ollama prompt for grounded answers with source
+citations. Ordinary conceptual questions remain local-only.
+
+### Search decision examples
+
+| Prompt | Search? | Reason |
+|---|---:|---|
+| `What is the latest LangChain release?` | Yes | Current release information |
+| `Search the web for current AI news` | Yes | Explicit web-search request |
+| `What is today's weather?` | Yes | Time-sensitive lookup |
+| `How does LangGraph work?` | No | Conceptual explanation |
+| `Explain dependency injection` | No | General knowledge |
+| `Write a FastAPI example` | No | Code-generation request |
+
+The discriminator returns a decision with `should_search`, `confidence`, and `reason`
+fields. This keeps search selection deterministic and testable instead of sending every
+prompt to a search engine.
+
+### Search provider behavior
+
+The default provider is DuckDuckGo HTML search and does not require an API key. Some
+networks return a DuckDuckGo anti-bot challenge rather than search results. In that case,
+Parakeet Lite automatically falls back to Bing HTML search and decodes Bing redirect URLs
+to the original source URLs. If both providers fail, the application reports a clear
+error instead of presenting an answer that appears web-grounded but has no sources.
+
+Search results are formatted as numbered sources:
+
+```text
+Web search results:
+[1] Source title
+URL: https://example.com
+Source snippet
+```
+
+The Ollama prompt instructs the model to cite these sources as `[1]`, `[2]`, and so on.
+Search results are context for the local model; they are not treated as unquestionable
+facts, and the model is instructed not to claim that a source says something it does not.
+DuckDuckGo search requires an internet connection but no API key.
+
+Before asking for an answer, the prompt panel can optionally improve the transcription.
+Enter the interview role, select an interview **Domain** such as Technology, Management,
+or Design, and select **Improve**. Ollama corrects punctuation, grammar, homophones, and
+likely speech-to-text errors while preserving the original meaning. The result remains
+editable and should be reviewed before submission.
+
 ## Component responsibilities
 
 | Component | Responsibility |
@@ -63,6 +115,8 @@ flowchart TD
 | `AudioRecorder` | Captures microphone PCM data, calculates levels, and enforces the time limit |
 | `Transcriber` | Converts PCM audio to a NumPy waveform and runs faster-whisper |
 | `LLMClient` | Checks Ollama, sends prompts, and parses streamed JSON responses |
+| `SearchDiscriminator` | Decides whether a prompt needs current external information |
+| `DuckDuckGoSearch` | Retrieves web results and falls back to Bing when necessary |
 | `ModelManager` | Detects GPU hardware, lazily loads Whisper, and releases model resources |
 | `ConfigManager` | Reads, validates, and writes JSON configuration |
 
@@ -130,6 +184,25 @@ Git because it contains machine-specific runtime settings.
 | `Ctrl+S` | Stop recording and transcribe |
 | `Ctrl+A` | Generate an answer from the current prompt |
 
+## Context-aware transcription
+
+The transcription editor includes two context controls:
+
+- **Interview role**: for example, `Backend Developer`, `Data Analyst`, or `Product Manager`
+- **Domain**: `General`, `Management`, `Design`, `Technology`, `Finance`, `Marketing`,
+  `Operations`, `Sales`, `Human Resources`, or `Customer Support`
+
+The improvement feature is intentionally conservative. It may correct terms such as
+programming languages, frameworks, databases, and cloud services for Technology interviews,
+or domain-specific language for other selected domains, when the surrounding sentence and
+interview role support the correction. It does not invent answers or facts.
+
+For Technology interviews, the correction prompt includes an AI developer terminology
+guide covering canonical names such as **LangChain**, **LangGraph**, **LangSmith**,
+**Hugging Face**, **OpenAI**, **RAG**, **LLM**, **FastAPI**, **PyTorch**, **PostgreSQL**,
+**Docker**, and **AWS**. These terms are used to repair plausible speech-recognition
+errors, not to inject unrelated technologies into the speaker's answer.
+
 ## Configuration
 
 The generated `config.json` controls audio, transcription, Ollama, UI, and hotkeys.
@@ -189,6 +262,16 @@ Start the Ollama desktop application or service, verify that it is listening on
 ollama list
 ollama pull qwen2.5:3b
 ```
+
+### Web search is unavailable
+
+Automatic web search uses DuckDuckGo and does not require credentials. Check that the
+machine has internet access and that HTTPS requests are allowed by the firewall. If a
+question does not need current information, the assistant continues without web search.
+
+The discriminator intentionally does not search every question containing words such as
+“what” or “how”. Use an explicit phrase such as **search the web**, **look it up**, or
+**find online** when you want to force a web lookup.
 
 ### Recording cannot start
 
