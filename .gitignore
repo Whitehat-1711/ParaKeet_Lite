@@ -1,0 +1,44 @@
+# Documentation files are excluded except for the project README.
+*.md
+!README.md
+
+# Python bytecode, test caches, and local environments.
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+.env/
+
+# Build and packaging output.
+build/
+dist/
+*.egg-info/
+
+# Local application state and generated runtime data.
+config.json
+*.log
+logs/
+recordings/
+models/
+
+# IDE and operating-system metadata.
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.DS_Store
+Thumbs.db
+
+# Local secrets and private overrides.
+.env
+.env.*
+!.env.example

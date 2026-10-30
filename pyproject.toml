@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parakeet-lite"
+version = "1.0.0"
+description = "Local speech-to-text and Ollama desktop assistant"
+requires-python = ">=3.10"
+dependencies = [
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+audio = ["numpy>=1.24", "sounddevice>=0.5.1"]
+transcription = ["faster-whisper>=1.0"]
+test = ["pytest>=8.0"]
+all = ["parakeet-lite[audio,transcription,test]"]
+
+[project.scripts]
+parakeet-lite = "parakeet_lite.main:main"
+
+[tool.setuptools.packages.find]
+include = ["parakeet_lite*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
