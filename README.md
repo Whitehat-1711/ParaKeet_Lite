@@ -197,11 +197,22 @@ programming languages, frameworks, databases, and cloud services for Technology 
 or domain-specific language for other selected domains, when the surrounding sentence and
 interview role support the correction. It does not invent answers or facts.
 
-For Technology interviews, the correction prompt includes an AI developer terminology
-guide covering canonical names such as **LangChain**, **LangGraph**, **LangSmith**,
-**Hugging Face**, **OpenAI**, **RAG**, **LLM**, **FastAPI**, **PyTorch**, **PostgreSQL**,
-**Docker**, and **AWS**. These terms are used to repair plausible speech-recognition
-errors, not to inject unrelated technologies into the speaker's answer.
+The correction prompt includes a domain terminology guide. Technology interviews use
+canonical names such as **LangChain**, **LangGraph**, **LangSmith**, **Hugging Face**,
+**OpenAI**, **RAG**, **LLM**, **FastAPI**, **PyTorch**, **PostgreSQL**, **Docker**, and
+**AWS**. Other domains use relevant terminology, including:
+
+- **Management**: stakeholder, roadmap, OKR, KPI, prioritization, milestone, Agile, Scrum
+- **Design**: UX, UI, usability, accessibility, persona, wireframe, prototype, Figma
+- **Finance**: revenue, EBITDA, cash flow, balance sheet, forecast, variance, ROI, audit
+- **Marketing**: target audience, buyer persona, conversion rate, funnel, SEO, campaign, A/B testing
+- **Operations**: SOP, workflow, throughput, supply chain, procurement, SLA, Six Sigma
+- **Sales**: prospect, qualification, pipeline, opportunity, objection handling, quota, CRM
+- **Human Resources**: recruitment, onboarding, employee engagement, compensation, payroll
+- **Customer Support**: ticket, escalation, SLA, knowledge base, CSAT, NPS, resolution time
+
+These terms are used to repair plausible speech-recognition errors, not to inject
+unrelated terminology into the speaker's answer.
 
 ## Configuration
 

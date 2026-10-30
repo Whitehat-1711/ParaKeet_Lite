@@ -37,6 +37,64 @@ Never insert a glossary term merely because it appears here. Use it only to repa
 a plausible recognition error or to standardize a term already implied by the text.
 """
 
+DOMAIN_TERMINOLOGY = {
+    "management": """
+Use these canonical management terms only when the context supports them:
+stakeholder, roadmap, OKR, KPI, strategy, prioritization, scope, deliverable,
+milestone, risk management, dependency, cross-functional, alignment, delegation,
+performance review, change management, project management, Agile, Scrum, and
+continuous improvement.
+""",
+    "design": """
+Use these canonical design terms only when the context supports them:
+user experience, UX, user interface, UI, usability, accessibility, persona,
+user journey, customer journey, wireframe, prototype, design system, component,
+layout, typography, color palette, interaction design, visual hierarchy,
+information architecture, user research, usability testing, and Figma.
+""",
+    "finance": """
+Use these canonical finance terms only when the context supports them:
+revenue, gross margin, net income, EBITDA, cash flow, balance sheet, income
+statement, forecast, budget, variance, accounts payable, accounts receivable,
+ROI, audit, compliance, risk assessment, assets, liabilities, equity,
+depreciation, and financial modeling.
+""",
+    "marketing": """
+Use these canonical marketing terms only when the context supports them:
+brand awareness, target audience, buyer persona, customer acquisition cost,
+customer lifetime value, conversion rate, click-through rate, engagement,
+impressions, reach, funnel, lead generation, content strategy, SEO, SEM,
+campaign, A/B testing, attribution, and marketing qualified lead.
+""",
+    "operations": """
+Use these canonical operations terms only when the context supports them:
+process improvement, standard operating procedure, SOP, workflow, throughput,
+capacity planning, supply chain, inventory, procurement, quality assurance,
+quality control, SLA, logistics, root cause analysis, lean, Six Sigma,
+continuous improvement, and operational efficiency.
+""",
+    "sales": """
+Use these canonical sales terms only when the context supports them:
+prospect, lead, qualification, discovery call, sales pipeline, opportunity,
+account executive, account manager, value proposition, objection handling,
+negotiation, proposal, closing, quota, territory, CRM, conversion rate,
+customer relationship, and sales enablement.
+""",
+    "human resources": """
+Use these canonical HR terms only when the context supports them:
+recruitment, talent acquisition, onboarding, employee engagement, performance
+management, compensation, benefits, payroll, policy, employee relations,
+learning and development, succession planning, diversity and inclusion,
+workforce planning, applicant tracking system, and compliance.
+""",
+    "customer support": """
+Use these canonical customer-support terms only when the context supports them:
+ticket, case, escalation, SLA, first response time, resolution time, knowledge
+base, troubleshooting, customer satisfaction, CSAT, NPS, service level,
+incident, queue, root cause, and customer experience.
+""",
+}
+
 
 class Orchestrator:
     def __init__(
@@ -128,7 +186,11 @@ class Orchestrator:
             f"Interview domain: {domain}\n"
             "Prefer vocabulary appropriate to this domain when the surrounding context "
             "supports it. Do not add specialized terms that are not supported by the text.\n"
-            + (AI_DEVELOPER_TERMINOLOGY if domain.lower() == "technology" else "")
+            + (
+                AI_DEVELOPER_TERMINOLOGY
+                if domain.lower() == "technology"
+                else DOMAIN_TERMINOLOGY.get(domain.lower(), "")
+            )
             + (
                 "For a technology interview, preserve product and framework names exactly "
                 "as written in the glossary when they are present or clearly implied.\n"
