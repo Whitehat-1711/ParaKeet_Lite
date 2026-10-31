@@ -21,6 +21,15 @@ generation. No application data is sent to a cloud AI service.
 - Graceful shutdown and model resource cleanup
 - Keyboard shortcuts for common operations
 
+## UI preview
+
+![Parakeet Lite UI preview](docs/assets/ui-screenshot.png)
+
+The interface provides a left prompt pane for transcription and interview context,
+including the role and domain controls, and a right pane for streamed assistant
+responses. The top toolbar exposes recording controls, the live audio level, and the
+recording timer.
+
 ## Architecture
 
 ```mermaid
