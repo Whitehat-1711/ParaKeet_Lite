@@ -1,0 +1,183 @@
+Parakeet Lite Desktop Assistant
+Prototype and Code Explanation Script
+
+1. Opening
+
+“This is Parakeet Lite, a local-first desktop assistant for interview preparation.
+It captures speech from the microphone, converts it into text with a local Whisper
+model, improves the transcription using interview context, and generates an answer
+with a locally running Ollama model.
+
+The important design goal is privacy: the core transcription and answer generation
+run on the user's machine. Web search is used only when the search discriminator
+decides that current external information is required.”
+
+2. Prototype walkthrough
+
+“When the application starts, the top-right badges show whether Ollama is connected
+and whether the application is using a CUDA GPU or CPU mode.
+
+The top toolbar contains Start recording, Stop, an input-level meter, and a recording
+timer. The recording is limited to 60 seconds so that the application stays responsive
+and uses bounded memory.
+
+The left pane is the prompt workspace. After recording, the transcription appears
+there and remains editable. The user can enter the interview role, such as Backend
+Developer or Product Manager, and choose a domain such as Technology, Management,
+Design, Finance, or Sales.
+
+The Improve button sends the transcription and the selected context to Ollama. The
+model corrects punctuation, grammar, homophones, and likely speech-recognition errors.
+It also uses a domain terminology guide. For a Technology interview, this includes
+terms such as LangChain, LangGraph, LangSmith, Hugging Face, RAG, FastAPI, PyTorch,
+Docker, and AWS. For other domains, it uses relevant terms such as KPI and roadmap
+for Management or UX and usability for Design.
+
+The right pane displays the generated answer progressively. Copy response copies
+the answer to the clipboard, and Clear removes it.
+
+The keyboard shortcuts are Ctrl+R to start recording, Ctrl+S to stop recording, and
+Ctrl+A to generate an answer.”
+
+3. Architecture explanation
+
+“The application is divided into small components:
+
+- UIController owns the Tkinter window, widgets, hotkeys, and visual feedback.
+- Orchestrator coordinates the complete workflow and application state.
+- AudioRecorder captures PCM microphone frames and calculates the audio level.
+- Transcriber converts PCM data into a NumPy waveform and sends it to faster-whisper.
+- ModelManager detects CUDA, loads Whisper lazily, and releases model resources.
+- LLMClient communicates with Ollama and parses its streaming JSON response.
+- SearchDiscriminator decides whether a question needs current web information.
+- DuckDuckGoSearch performs the search and falls back to Bing if DuckDuckGo returns
+  an anti-bot challenge.
+- ConfigManager reads, validates, and writes the JSON configuration.
+- The data classes in models.py define shared application contracts.”
+
+4. End-to-end data flow
+
+“The normal recording flow is:
+
+1. The user presses Start.
+2. AudioRecorder captures 16-bit PCM audio.
+3. The level callback updates the input meter.
+4. The user presses Stop.
+5. Orchestrator sends the audio to Transcriber.
+6. Transcriber loads the configured Whisper model only when needed.
+7. faster-whisper returns English text.
+8. The text is placed in the editable prompt area.
+
+The answer flow is:
+
+1. The user reviews or edits the transcription.
+2. Orchestrator configures the Ollama model parameters.
+3. SearchDiscriminator evaluates the prompt.
+4. If the prompt asks for current information, the search adapter retrieves sources.
+5. The sources are inserted into the Ollama prompt.
+6. LLMClient receives streamed JSON tokens.
+7. UIController appends each token to the response pane.
+8. The status changes to Answer complete.”
+
+5. Search discriminator explanation
+
+“The application does not search the web for every question. SearchDiscriminator
+returns a SearchDecision with three fields:
+
+- should_search: whether a search should happen
+- confidence: confidence in the decision
+- reason: why the decision was made
+
+Explicit requests such as ‘search the web’ have the highest confidence. Freshness
+signals such as ‘latest’, ‘today’, or ‘current’ also trigger a search. Requests such
+as ‘what is the latest LangChain release?’ are searched.
+
+Conceptual requests such as ‘How does LangGraph work?’, ‘Explain dependency injection’,
+or ‘Write a FastAPI example’ remain local-only. This keeps the system faster and avoids
+unnecessary web requests.”
+
+6. Code walkthrough
+
+“The entry point is parakeet_lite/main.py. It loads the configuration, creates the
+Orchestrator, creates the UIController, checks Ollama connectivity, and starts the
+Tkinter event loop.
+
+models.py contains the typed data structures. AppState represents IDLE, RECORDING,
+TRANSCRIBING, GENERATING, and ERROR. AppConfig groups AudioConfig,
+TranscriptionConfig, LLMConfig, UIConfig, and HotkeyConfig.
+
+config.py provides ConfigManager. It creates a default config.json when needed,
+validates values such as sample rate and recording duration, and normalizes JSON
+arrays back into Python tuples.
+
+audio.py contains AudioRecorder. It prefers PyAudio when available and uses
+sounddevice as the Windows-friendly fallback. The recorder stops automatically at
+the configured maximum duration.
+
+transcriber.py converts raw 16-bit PCM samples into float32 audio values. This avoids
+the PyAV metadata_errors compatibility problem and provides faster-whisper with a
+direct waveform input.
+
+llm.py contains LLMClient. It calls Ollama at localhost:11434, supports model
+selection, sends generation parameters, and yields response tokens as they arrive.
+
+orchestrator.py is the application coordinator. It updates state, handles errors,
+connects recording to transcription, connects prompts to Ollama, and unloads the
+Whisper model during shutdown.”
+
+7. Resource and error handling
+
+“The application uses worker threads for recording, transcription, and generation so
+the Tkinter event loop remains responsive. UI updates are scheduled back on the main
+Tkinter thread.
+
+Errors are surfaced to the user through status messages and dialogs. Missing PyAudio
+or faster-whisper packages produce actionable messages. Ollama connectivity failures
+are shown at startup. Web-search failures are explicit and never presented as
+successful, sourced answers.
+
+On shutdown, active recording is stopped, the Whisper model is unloaded, and CUDA
+memory is released when available.”
+
+8. Live demonstration sequence
+
+“For the live demonstration:
+
+1. Start Ollama and verify that qwen2.5:3b is installed.
+2. Launch the application with:
+
+   .\.venv\Scripts\python.exe -m parakeet_lite.main
+
+3. Confirm that the Ollama badge says connected.
+4. Enter the role ‘AI Developer’.
+5. Select the Technology domain.
+6. Press Ctrl+R and say:
+
+   ‘I built a long chain application with a long graph workflow and used hugging face
+   for embeddings.’
+
+7. Press Ctrl+S.
+8. Review the transcription.
+9. Press Improve and show corrections such as LangChain, LangGraph, and Hugging Face.
+10. Press Ctrl+A to generate the answer.
+11. Demonstrate that the response streams into the right pane.
+12. Ask a current-information question such as:
+
+   ‘What is the latest LangChain release?’
+
+13. Show that the discriminator invokes web search and that the answer includes sources.
+14. Ask:
+
+   ‘How does LangGraph work?’
+
+15. Show that this conceptual question goes directly to Ollama without web search.”
+
+9. Closing
+
+“Parakeet Lite demonstrates a complete local AI workflow: audio capture, speech
+recognition, context-aware correction, local language-model generation, optional
+web grounding, and a responsive desktop interface.
+
+The design is intentionally modular. Hardware integrations, search providers, model
+selection, UI behavior, and configuration validation can all evolve independently
+without changing the entire application.”

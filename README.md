@@ -47,6 +47,14 @@ flowchart TD
     LLM --> Ollama[Ollama Service localhost:11434]
     Ollama -->|Streaming JSON tokens| LLM
     LLM -->|Progressive response| UI
+    Prompt --> Discriminator[Search Discriminator]
+    Discriminator -->|Current or explicit web request| Search[Web Search Adapter]
+    Search --> DDG[DuckDuckGo HTML]
+    Search -->|Fallback when challenged| Bing[Bing HTML]
+    DDG -->|Titles, snippets, URLs| Search
+    Bing -->|Titles, snippets, URLs| Search
+    Search --> Sources[Numbered source context]
+    Sources -->|Conditional grounding context| LLM
     Models --> GPU[CUDA GPU or CPU fallback]
     Config[config.json] --> Orch
     Orch --> Status[Status and error feedback]
